@@ -1,0 +1,85 @@
+# Gradle
+.gradle/# Gradle
+.gradle/
+build/
+**/build/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+
+# Local Android SDK path
+local.properties
+
+# Generated files
+captures/
+.externalNativeBuild/
+.cxx/
+
+# APK / App Bundle outputs
+*.apk
+*.aab
+
+# StageNow deployment APK intentionally kept in repository
+!Zebrafinder.apk
+
+# Signing / secrets
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+build/
+**/build/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+
+# Local Android SDK path
+local.properties
+
+# Generated files
+captures/
+.externalNativeBuild/
+.cxx/
+
+# APK / App Bundle outputs
+*.apk
+*.aab
+
+# StageNow deployment APK intentionally kept in repository
+!Zebrafinder.apk
+
+# Signing / secrets
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
