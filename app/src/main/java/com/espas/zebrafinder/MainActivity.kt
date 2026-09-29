@@ -6,7 +6,6 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
-import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.BluetoothStatusCodes
@@ -29,18 +28,25 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.espas.zebrafinder.ui.theme.ZebraFinderTheme
 import java.util.UUID
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 
 
 // ============================================================
@@ -48,17 +54,23 @@ import java.util.UUID
 // ============================================================
 
 private val ZEBRA_SERVICE_UUID =
-    UUID.fromString(
-        "7d9f0001-6f65-4a3e-9f23-2e4d8f3c0001"
-    )
+    UUID.fromString("7d9f0001-6f65-4a3e-9f23-2e4d8f3c0001")
 
 private val ZEBRA_COMMAND_UUID =
-    UUID.fromString(
-        "7d9f0002-6f65-4a3e-9f23-2e4d8f3c0001"
-    )
+    UUID.fromString("7d9f0002-6f65-4a3e-9f23-2e4d8f3c0001")
 
 private val ZEBRA_SERVICE_PARCEL_UUID =
     ParcelUuid(ZEBRA_SERVICE_UUID)
+
+
+// ============================================================
+// GL-Zugriff
+// ============================================================
+
+private const val GL_PIN = "492680"
+
+private const val GL_UNLOCK_DURATION_MS =
+    5 * 60 * 1000L
 
 
 // ============================================================
@@ -79,8 +91,7 @@ data class ZebraDevice(
 
 class MainActivity : ComponentActivity() {
 
-    private lateinit var bluetoothManager:
-            BluetoothManager
+    private lateinit var bluetoothManager: BluetoothManager
 
     private lateinit var bluetoothAdapter:
             android.bluetooth.BluetoothAdapter
@@ -88,13 +99,12 @@ class MainActivity : ComponentActivity() {
     private val handler =
         Handler(Looper.getMainLooper())
 
-    private var activeGatt:
-            BluetoothGatt? = null
+    private var activeGatt: BluetoothGatt? = null
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // UI Status
-    // --------------------------------------------------------
+    // ========================================================
 
     private var permissionsGranted by
     mutableStateOf(false)
@@ -103,12 +113,37 @@ class MainActivity : ComponentActivity() {
     mutableStateOf(false)
 
     private var foundDevices by
-    mutableStateOf<List<ZebraDevice>>(
-        emptyList()
-    )
+    mutableStateOf<List<ZebraDevice>>(emptyList())
 
     private var commandStatus by
     mutableStateOf("")
+
+
+    // ========================================================
+    // GL Status
+    // ========================================================
+
+    private var isGlUnlocked by
+    mutableStateOf(false)
+
+    private var pinError by
+    mutableStateOf("")
+
+    private val glAutoLockRunnable =
+        Runnable {
+
+            isGlUnlocked = false
+
+            pinError = ""
+
+            stopBleScan()
+
+            foundDevices =
+                emptyList()
+
+            commandStatus =
+                ""
+        }
 
 
     // ========================================================
@@ -117,22 +152,20 @@ class MainActivity : ComponentActivity() {
 
     private val permissionLauncher =
         registerForActivityResult(
-            ActivityResultContracts
-                .RequestMultiplePermissions()
+            ActivityResultContracts.RequestMultiplePermissions()
         ) {
 
             permissionsGranted =
                 hasRequiredPermissions()
 
             if (permissionsGranted) {
-
                 startFinderService()
             }
         }
 
 
     // ========================================================
-    // Scan Callback
+    // BLE Scan Callback
     // ========================================================
 
     private val scanCallback =
@@ -142,7 +175,6 @@ class MainActivity : ComponentActivity() {
                 callbackType: Int,
                 result: ScanResult
             ) {
-
                 processScanResult(result)
             }
 
@@ -150,7 +182,6 @@ class MainActivity : ComponentActivity() {
             override fun onBatchScanResults(
                 results: MutableList<ScanResult>
             ) {
-
                 results.forEach {
                     processScanResult(it)
                 }
@@ -160,7 +191,6 @@ class MainActivity : ComponentActivity() {
             override fun onScanFailed(
                 errorCode: Int
             ) {
-
                 isScanning = false
 
                 commandStatus =
@@ -216,9 +246,7 @@ class MainActivity : ComponentActivity() {
 
                     gatt.close()
 
-                    if (
-                        activeGatt == gatt
-                    ) {
+                    if (activeGatt == gatt) {
                         activeGatt = null
                     }
                 }
@@ -242,6 +270,7 @@ class MainActivity : ComponentActivity() {
                     }
 
                     gatt.disconnect()
+
                     return
                 }
 
@@ -253,10 +282,9 @@ class MainActivity : ComponentActivity() {
 
 
                 val characteristic =
-                    service
-                        ?.getCharacteristic(
-                            ZEBRA_COMMAND_UUID
-                        )
+                    service?.getCharacteristic(
+                        ZEBRA_COMMAND_UUID
+                    )
 
 
                 if (
@@ -271,6 +299,7 @@ class MainActivity : ComponentActivity() {
                     }
 
                     gatt.disconnect()
+
                     return
                 }
 
@@ -333,9 +362,7 @@ class MainActivity : ComponentActivity() {
         savedInstanceState: Bundle?
     ) {
 
-        super.onCreate(
-            savedInstanceState
-        )
+        super.onCreate(savedInstanceState)
 
 
         bluetoothManager =
@@ -356,49 +383,95 @@ class MainActivity : ComponentActivity() {
 
             ZebraFinderTheme {
 
-                MainScreen(
+                if (isGlUnlocked) {
 
-                    localDeviceName =
-                        getLocalDeviceName(),
+                    MainScreen(
 
-                    permissionsGranted =
-                        permissionsGranted,
+                        localDeviceName =
+                            getLocalDeviceName(),
 
-                    isScanning =
-                        isScanning,
+                        permissionsGranted =
+                            permissionsGranted,
 
-                    devices =
-                        foundDevices,
+                        isScanning =
+                            isScanning,
 
-                    commandStatus =
-                        commandStatus,
+                        devices =
+                            foundDevices,
 
-                    onRequestPermissions = {
-                        requestRequiredPermissions()
-                    },
+                        commandStatus =
+                            commandStatus,
 
-                    onStartScan = {
-                        startBleScan()
-                    },
+                        onRequestPermissions = {
+                            requestRequiredPermissions()
+                        },
 
-                    onStopScan = {
-                        stopBleScan()
-                    },
+                        onStartScan = {
+                            startBleScan()
+                        },
 
-                    onRingDevice = { device ->
+                        onStopScan = {
+                            stopBleScan()
+                        },
 
-                        ringDevice(device)
-                    }
-                )
+                        onRingDevice = { device ->
+
+                            ringDevice(device)
+                        }
+                    )
+
+                } else {
+
+                    GlPinScreen(
+
+                        errorMessage =
+                            pinError,
+
+                        onPinSubmit = { pin ->
+
+                            unlockGlAccess(pin)
+                        }
+                    )
+                }
             }
         }
 
 
-        if (
-            permissionsGranted
-        ) {
-
+        if (permissionsGranted) {
             startFinderService()
+        }
+    }
+
+
+    // ========================================================
+    // GL-PIN
+    // ========================================================
+
+    private fun unlockGlAccess(
+        pin: String
+    ) {
+
+        if (pin == GL_PIN) {
+
+            isGlUnlocked = true
+
+            pinError = ""
+
+            handler.removeCallbacks(
+                glAutoLockRunnable
+            )
+
+            handler.postDelayed(
+                glAutoLockRunnable,
+                GL_UNLOCK_DURATION_MS
+            )
+
+        } else {
+
+            isGlUnlocked = false
+
+            pinError =
+                "Falsche PIN"
         }
     }
 
@@ -457,37 +530,29 @@ class MainActivity : ComponentActivity() {
         ) {
 
             checkSelfPermission(
-                Manifest.permission
-                    .BLUETOOTH_SCAN
+                Manifest.permission.BLUETOOTH_SCAN
             ) ==
-                    android.content.pm
-                        .PackageManager
+                    android.content.pm.PackageManager
                         .PERMISSION_GRANTED &&
 
                     checkSelfPermission(
-                        Manifest.permission
-                            .BLUETOOTH_CONNECT
+                        Manifest.permission.BLUETOOTH_CONNECT
                     ) ==
-                    android.content.pm
-                        .PackageManager
+                    android.content.pm.PackageManager
                         .PERMISSION_GRANTED &&
 
                     checkSelfPermission(
-                        Manifest.permission
-                            .BLUETOOTH_ADVERTISE
+                        Manifest.permission.BLUETOOTH_ADVERTISE
                     ) ==
-                    android.content.pm
-                        .PackageManager
+                    android.content.pm.PackageManager
                         .PERMISSION_GRANTED
 
         } else {
 
             checkSelfPermission(
-                Manifest.permission
-                    .ACCESS_FINE_LOCATION
+                Manifest.permission.ACCESS_FINE_LOCATION
             ) ==
-                    android.content.pm
-                        .PackageManager
+                    android.content.pm.PackageManager
                         .PERMISSION_GRANTED
         }
     }
@@ -503,6 +568,7 @@ class MainActivity : ComponentActivity() {
             ) {
 
                 arrayOf(
+
                     Manifest.permission
                         .BLUETOOTH_SCAN,
 
@@ -538,6 +604,7 @@ class MainActivity : ComponentActivity() {
         if (!hasRequiredPermissions()) {
 
             requestRequiredPermissions()
+
             return
         }
 
@@ -590,20 +657,15 @@ class MainActivity : ComponentActivity() {
 
 
         scanner.startScan(
-
             listOf(filter),
-
             settings,
-
             scanCallback
         )
 
 
         handler.postDelayed(
             {
-
                 stopBleScan()
-
             },
             15_000
         )
@@ -658,18 +720,15 @@ class MainActivity : ComponentActivity() {
 
                     null
                 }
-                ?: "ZebraFinder"
+                ?: "ZebraFinder ${result.device.address.takeLast(5)}"
 
 
         val localName =
             getLocalDeviceName()
 
 
-        // eigenes Gerät nicht anzeigen
-        if (
-            name ==
-            localName
-        ) {
+        // Eigenes Gerät nicht anzeigen
+        if (name == localName) {
             return
         }
 
@@ -703,7 +762,6 @@ class MainActivity : ComponentActivity() {
                 .plus(device)
 
                 .sortedByDescending {
-
                     it.rssi
                 }
     }
@@ -855,6 +913,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
 
+        handler.removeCallbacks(
+            glAutoLockRunnable
+        )
+
         stopBleScan()
 
 
@@ -871,9 +933,8 @@ class MainActivity : ComponentActivity() {
         activeGatt = null
 
 
-        // WICHTIG:
         // ZebraFinderService wird NICHT gestoppt.
-        // Er soll weiter im Hintergrund laufen.
+        // Das Gerät bleibt im Hintergrund auffindbar.
 
         super.onDestroy()
     }
@@ -881,31 +942,23 @@ class MainActivity : ComponentActivity() {
 
 
 // ============================================================
-// UI
+// GL PIN Screen
 // ============================================================
 
 @Composable
-fun MainScreen(
+fun GlPinScreen(
 
-    localDeviceName: String,
+    errorMessage: String,
 
-    permissionsGranted: Boolean,
-
-    isScanning: Boolean,
-
-    devices: List<ZebraDevice>,
-
-    commandStatus: String,
-
-    onRequestPermissions: () -> Unit,
-
-    onStartScan: () -> Unit,
-
-    onStopScan: () -> Unit,
-
-    onRingDevice:
-        (ZebraDevice) -> Unit
+    onPinSubmit:
+        (String) -> Unit
 ) {
+
+    var pin by
+    remember {
+        mutableStateOf("")
+    }
+
 
     Column(
 
@@ -934,135 +987,110 @@ fun MainScreen(
         Text(
 
             text =
-                "Dieses Gerät: $localDeviceName",
+                "GL-Zugriff",
 
             modifier =
                 Modifier.padding(
-                    top = 12.dp
+                    top = 24.dp
                 ),
 
             style =
                 MaterialTheme
                     .typography
-                    .titleMedium
+                    .titleLarge
         )
 
 
         Text(
 
             text =
-                if (
-                    permissionsGranted
-                ) {
-
-                    "Finder-Dienst: bereit"
-
-                } else {
-
-                    "Bluetooth-Berechtigungen fehlen"
-                },
+                "Bitte GL-PIN eingeben.",
 
             modifier =
                 Modifier.padding(
                     top = 12.dp,
-                    bottom = 20.dp
+                    bottom = 16.dp
                 )
         )
 
 
-        if (
-            !permissionsGranted
-        ) {
+        OutlinedTextField(
 
-            Button(
+            value =
+                pin,
 
-                onClick =
-                    onRequestPermissions
-            ) {
+            onValueChange = { value ->
 
+                pin =
+                    value
+                        .filter {
+                            it.isDigit()
+                        }
+                        .take(6)
+            },
+
+            label = {
                 Text(
-                    "Berechtigungen anfordern"
+                    "PIN"
                 )
-            }
+            },
 
-            return@Column
-        }
+            singleLine =
+                true,
 
+            visualTransformation =
+                PasswordVisualTransformation(),
 
-        // ----------------------------------------------------
-        // Suche
-        // ----------------------------------------------------
+            keyboardOptions =
+                KeyboardOptions(
+                    keyboardType =
+                        KeyboardType.NumberPassword
+                ),
 
-        Row(
-
-            horizontalArrangement =
-                Arrangement.spacedBy(
-                    12.dp
-                )
-        ) {
-
-
-            Button(
-
-                onClick =
-                    onStartScan,
-
-                enabled =
-                    !isScanning
-            ) {
-
-                Text(
-
-                    if (
-                        isScanning
-                    ) {
-
-                        "Suche läuft..."
-
-                    } else {
-
-                        "Zebras suchen"
-                    }
-                )
-            }
-
-
-            if (
-                isScanning
-            ) {
-
-                Button(
-
-                    onClick =
-                        onStopScan
-                ) {
-
-                    Text(
-                        "Stop"
-                    )
-                }
-            }
-        }
+            modifier =
+                Modifier.fillMaxWidth()
+        )
 
 
         if (
-            commandStatus.isNotBlank()
+            errorMessage.isNotBlank()
         ) {
 
             Text(
 
                 text =
-                    commandStatus,
+                    errorMessage,
 
                 modifier =
                     Modifier.padding(
-                        top = 16.dp
-                    ),
+                        top = 12.dp
+                    )
+            )
+        }
 
-                style =
-                    MaterialTheme
-                        .typography
-                        .bodyLarge
+
+        Button(
+
+            onClick = {
+
+                onPinSubmit(
+                    pin
+                )
+
+                pin = ""
+            },
+
+            enabled =
+                pin.length == 6,
+
+            modifier =
+                Modifier.padding(
+                    top = 16.dp
+                )
+        ) {
+
+            Text(
+                "Freischalten"
             )
         }
 
@@ -1070,35 +1098,247 @@ fun MainScreen(
         Text(
 
             text =
-                "Gefundene Zebras: ${devices.size}",
+                "Nach der Anmeldung ist der Finder 5 Minuten freigeschaltet.",
 
             modifier =
                 Modifier.padding(
-                    top = 24.dp,
-                    bottom = 8.dp
+                    top = 20.dp
                 ),
 
             style =
                 MaterialTheme
                     .typography
-                    .titleMedium
+                    .bodySmall
         )
+    }
+}
 
 
-        devices.forEach { device ->
+// ============================================================
+// Finder UI
+// ============================================================
 
-            ZebraDeviceRow(
+@Composable
+fun MainScreen(
 
-                device =
-                    device,
+    localDeviceName: String,
 
-                onRing = {
+    permissionsGranted: Boolean,
 
-                    onRingDevice(
-                        device
+    isScanning: Boolean,
+
+    devices: List<ZebraDevice>,
+
+    commandStatus: String,
+
+    onRequestPermissions: () -> Unit,
+
+    onStartScan: () -> Unit,
+
+    onStopScan: () -> Unit,
+
+    onRingDevice:
+        (ZebraDevice) -> Unit
+) {
+
+    LazyColumn(
+
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+
+        verticalArrangement =
+            Arrangement.spacedBy(8.dp)
+    ) {
+
+        item {
+
+            Text(
+                text = "ZebraFinder",
+                style =
+                    MaterialTheme
+                        .typography
+                        .headlineMedium
+            )
+        }
+
+
+        item {
+
+            Text(
+
+                text =
+                    "Dieses Gerät: $localDeviceName",
+
+                modifier =
+                    Modifier.padding(
+                        top = 12.dp
+                    ),
+
+                style =
+                    MaterialTheme
+                        .typography
+                        .titleMedium
+            )
+        }
+
+
+        item {
+
+            Text(
+
+                text =
+                    if (permissionsGranted) {
+
+                        "Finder-Dienst: bereit"
+
+                    } else {
+
+                        "Bluetooth-Berechtigungen fehlen"
+                    },
+
+                modifier =
+                    Modifier.padding(
+                        top = 12.dp,
+                        bottom = 20.dp
+                    )
+            )
+        }
+
+
+        if (!permissionsGranted) {
+
+            item {
+
+                Button(
+                    onClick =
+                        onRequestPermissions
+                ) {
+
+                    Text(
+                        "Berechtigungen anfordern"
                     )
                 }
-            )
+            }
+
+        } else {
+
+            item {
+
+                Row(
+
+                    horizontalArrangement =
+                        Arrangement.spacedBy(
+                            12.dp
+                        )
+                ) {
+
+                    Button(
+
+                        onClick =
+                            onStartScan,
+
+                        enabled =
+                            !isScanning
+                    ) {
+
+                        Text(
+
+                            if (isScanning) {
+
+                                "Suche läuft..."
+
+                            } else {
+
+                                "Zebras suchen"
+                            }
+                        )
+                    }
+
+
+                    if (isScanning) {
+
+                        Button(
+                            onClick =
+                                onStopScan
+                        ) {
+
+                            Text(
+                                "Stop"
+                            )
+                        }
+                    }
+                }
+            }
+
+
+            if (
+                commandStatus.isNotBlank()
+            ) {
+
+                item {
+
+                    Text(
+
+                        text =
+                            commandStatus,
+
+                        modifier =
+                            Modifier.padding(
+                                top = 16.dp
+                            ),
+
+                        style =
+                            MaterialTheme
+                                .typography
+                                .bodyLarge
+                    )
+                }
+            }
+
+
+            item {
+
+                Text(
+
+                    text =
+                        "Gefundene Zebras: ${devices.size}",
+
+                    modifier =
+                        Modifier.padding(
+                            top = 20.dp,
+                            bottom = 8.dp
+                        ),
+
+                    style =
+                        MaterialTheme
+                            .typography
+                            .titleMedium
+                )
+            }
+
+
+            items(
+                items = devices,
+                key = {
+                    it.address
+                }
+            ) { device ->
+
+                ZebraDeviceRow(
+
+                    device =
+                        device,
+
+                    onRing = {
+
+                        onRingDevice(
+                            device
+                        )
+                    }
+                )
+            }
         }
     }
 }
