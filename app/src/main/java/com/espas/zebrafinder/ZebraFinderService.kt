@@ -47,6 +47,9 @@ class ZebraFinderService : Service() {
 
         private const val NOTIFICATION_ID =
             1001
+
+        const val ACTION_REFRESH_ADVERTISING =
+            "com.espas.zebrafinder.REFRESH_ADVERTISING"
     }
 
     private lateinit var bluetoothManager:
@@ -103,7 +106,12 @@ class ZebraFinderService : Service() {
         startId: Int
     ): Int {
 
-        if (!isAdvertising) {
+        if (intent?.action == ACTION_REFRESH_ADVERTISING) {
+            stopAdvertising()
+            if (hasBluetoothPermissions() && bluetoothAdapter.isEnabled) {
+                startAdvertising()
+            }
+        } else if (!isAdvertising) {
             startFinder()
         }
 
